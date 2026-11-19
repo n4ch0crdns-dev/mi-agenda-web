@@ -13,14 +13,17 @@
     button { background: #06b6d4; color: #0f172a; font-weight: bold; cursor: pointer; border: none; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
     button.secondary { background: #334155; color: #f8fafc; font-weight: normal; }
+    button.edit { background: #f59e0b; color: #0f172a; width: auto; padding: 0.4rem 0.8rem; margin-top: 0; }
     button.danger { background: #ef4444; color: white; width: auto; padding: 0.4rem 0.8rem; margin-top: 0; }
-    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.8rem; cursor: pointer; font-size: 0.9rem; color: #cbd5e1; user-select: none; }
+    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; cursor: pointer; font-size: 0.9rem; color: #cbd5e1; user-select: none; }
     .checkbox-row input { width: auto; margin: 0; accent-color: #06b6d4; }
     .fila-recordatorio { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
     .fila-recordatorio input, .fila-recordatorio select { margin-top: 0; }
     .evento { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid #334155; padding: 0.8rem 0; }
     .evento:last-child { border-bottom: none; }
+    .acciones-evento { display: flex; gap: 0.4rem; flex-shrink: 0; }
     .badge { display: inline-block; background: #0f172a; color: #38bdf8; font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid #334155; margin-left: 0.4rem; vertical-align: middle; }
+    .badge.anual { color: #a78bfa; border-color: #4c1d95; }
     .hidden { display: none; }
   </style>
 </head>
@@ -34,16 +37,21 @@
   </div>
 
   <form id="form-evento" class="card hidden">
-    <h3>Nuevo Evento</h3>
+    <h3 id="titulo-formulario">Nuevo Evento</h3>
     <input type="text" id="titulo" placeholder="Título del evento" required>
     <textarea id="descripcion" placeholder="Descripción (opcional)" rows="2"></textarea>
 
     <label class="checkbox-row">
       <input type="checkbox" id="todo-el-dia">
-      Evento de todo el día (ej. cumpleaños o feriados)
+      Evento de todo el día (sin hora específica)
+    </label>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="repetir-anual">
+      Repetir todos los años (ej. cumpleaños o aniversarios)
     </label>
     
-    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.6rem;">Inicio:</label>
+    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.7rem;">Inicio:</label>
     <input type="datetime-local" id="inicio" required>
     
     <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.6rem;">Fin:</label>
@@ -65,6 +73,7 @@
     <button type="button" id="btn-agregar-rec" class="secondary" style="margin-top: 0.5rem;">+ Agregar otra notificación</button>
 
     <button type="submit" id="btn-guardar" style="margin-top: 1rem;">Guardar en Web y Google Calendar</button>
+    <button type="button" id="btn-cancelar-edicion" class="secondary hidden" style="margin-top: 0.5rem;">Cancelar edición</button>
   </form>
 
   <div class="card">

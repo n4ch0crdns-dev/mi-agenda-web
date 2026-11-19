@@ -31,6 +31,38 @@ const listaEventos = document.getElementById("lista-eventos");
 const contenedorRec = document.getElementById("contenedor-recordatorios");
 const btnAgregarRec = document.getElementById("btn-agregar-rec");
 
+// Activar interfaz conectada
+function establecerSesionConectada(token, expiresInSeconds = 3500) {
+  accessToken = token;
+  // Guardar token y tiempo de expiración (con margen de 1 minuto)
+  const expiraEn = Date.now() + (expiresInSeconds - 60) * 1000;
+  sessionStorage.setItem("gcal_token", token);
+  sessionStorage.setItem("gcal_expira", expiraEn.toString());
+
+  estadoAuth.textContent = "Conectado a Google Calendar";
+  estadoAuth.style.color = "#4ade80";
+  btnAuth.textContent = "Renovar sesión de Google";
+  formEvento.classList.remove("hidden");
+}
+
+// Restaurar sesión inmediatamente si el token guardado aún no expira
+function verificarSesionGuardada() {
+  const tokenGuardado = sessionStorage.getItem("gcal_token");
+  const expiraGuardado = parseInt(sessionStorage.getItem("gcal_expira") || "0", 10);
+
+  if (tokenGuardado && Date.now() < expiraGuardado) {
+    accessToken = tokenGuardado;
+    estadoAuth.textContent = "Conectado a Google Calendar";
+    estadoAuth.style.color = "#4ade80";
+    btnAuth.textContent = "Renovar sesión de Google";
+    formEvento.classList.remove("hidden");
+    return true;
+  }
+  return false;
+}
+
+verificarSesionGuardada();
+
 // Inicializar cliente de Google Identity Services
 window.onload = () => {
   tokenClient = google.accounts.oauth2.initTokenClient({
@@ -38,21 +70,28 @@ window.onload = () => {
     scope: SCOPES,
     callback: (tokenResponse) => {
       if (tokenResponse.error) {
+        // Si falla la renovación silenciosa, pedir consentimiento normal
+        if (tokenResponse.error === "interaction_required" || tokenResponse.error === "consent_required") {
+          tokenClient.requestAccessToken({ prompt: "select_account" });
+          return;
+        }
         console.error("Error OAuth:", tokenResponse);
         alert("Error al conectar con Google: " + tokenResponse.error);
         return;
       }
-      accessToken = tokenResponse.access_token;
-      estadoAuth.textContent = "Conectado a Google Calendar";
-      estadoAuth.style.color = "#4ade80";
-      btnAuth.textContent = "Renovar sesión de Google";
-      formEvento.classList.remove("hidden");
+      establecerSesionConectada(tokenResponse.access_token, tokenResponse.expires_in);
     },
   });
+
+  // Si no había sesión vigente en storage, intentar conectar silenciosamente al abrir
+  if (!accessToken) {
+    tokenClient.requestAccessToken({ prompt: "" });
+  }
 };
 
+// Clic manual: usa prompt vacío para no volver a pedir permisos ya aceptados
 btnAuth.onclick = () => {
-  tokenClient.requestAccessToken({ prompt: "consent" });
+  tokenClient.requestAccessToken({ prompt: "" });
 };
 
 // Gestión dinámica de múltiples notificaciones en el formulario
@@ -73,7 +112,6 @@ function crearFilaRecordatorio(cantidad = 1, unidad = "60") {
   return div;
 }
 
-// Activar botón quitar en la fila inicial
 contenedorRec.querySelector(".btn-quitar-rec").onclick = (e) => {
   e.target.closest(".fila-recordatorio").remove();
 };
@@ -85,7 +123,6 @@ btnAgregarRec.onclick = () => {
   contenedorRec.appendChild(crearFilaRecordatorio(1, "1440"));
 };
 
-// Formatear minutos totales a texto legible (ej. 10080 -> "1 semana antes")
 function formatearAnticipacion(minutosTotales) {
   if (minutosTotales === 0) return "Al momento del evento";
   if (minutosTotales % 10080 === 0) {
@@ -117,7 +154,6 @@ formEvento.onsubmit = async (e) => {
   const inicioLocal = document.getElementById("inicio").value;
   const finLocal = document.getElementById("fin").value;
 
-  // Recopilar y convertir todas las notificaciones a minutos
   const filas = contenedorRec.querySelectorAll(".fila-recordatorio");
   const listaMinutos = [];
   const overridesGoogle = [];
@@ -127,7 +163,6 @@ formEvento.onsubmit = async (e) => {
     const multiplicador = parseInt(fila.querySelector(".rec-unidad").value, 10);
     const totalMinutos = cantidad * multiplicador;
 
-    // Límite oficial de Google Calendar API: 40320 minutos (4 semanas)
     if (totalMinutos > 40320) {
       btnGuardar.disabled = false;
       btnGuardar.textContent = "Guardar en Web y Google Calendar";
@@ -155,7 +190,6 @@ formEvento.onsubmit = async (e) => {
   };
 
   try {
-    // A. Enviar a Google Calendar API
     const resp = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
       method: "POST",
       headers: {
@@ -165,12 +199,15 @@ formEvento.onsubmit = async (e) => {
       body: JSON.stringify(eventoGoogle)
     });
 
+    if (resp.status === 401) {
+      sessionStorage.removeItem("gcal_token");
+      throw new Error("Tu sesión expiró. Presiona 'Renovar sesión de Google' e inténtalo de nuevo.");
+    }
     if (!resp.ok) {
-      throw new Error("Error al crear en Google Calendar. Si pasó más de 1 hora, presiona 'Renovar sesión de Google'.");
+      throw new Error("Error al crear en Google Calendar.");
     }
     const dataGoogle = await resp.json();
 
-    // B. Guardar en Firestore
     await addDoc(eventosRef, {
       titulo,
       descripcion,
@@ -210,7 +247,6 @@ onSnapshot(q, (snapshot) => {
       dateStyle: "medium", timeStyle: "short"
     });
 
-    // Compatibilidad con eventos nuevos (array recordatorios) y anteriores (minutosAlerta)
     const listaAvisos = Array.isArray(ev.recordatorios)
       ? ev.recordatorios.map(formatearAnticipacion).join(" · ")
       : (ev.minutosAlerta !== undefined ? formatearAnticipacion(ev.minutosAlerta) : "Sin aviso");
@@ -237,8 +273,12 @@ onSnapshot(q, (snapshot) => {
           headers: { "Authorization": `Bearer ${accessToken}` }
         });
 
+        if (delResp.status === 401) {
+          sessionStorage.removeItem("gcal_token");
+          throw new Error("Tu sesión expiró. Presiona 'Renovar sesión de Google' e inténtalo de nuevo.");
+        }
         if (!delResp.ok && delResp.status !== 404 && delResp.status !== 410) {
-          throw new Error("No se pudo eliminar de Google Calendar. Renueva tu sesión e inténtalo de nuevo.");
+          throw new Error("No se pudo eliminar de Google Calendar.");
         }
 
         await deleteDoc(doc(db, "agenda_eventos", docId));

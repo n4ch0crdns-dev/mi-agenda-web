@@ -4,16 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mi Agenda Sincronizada</title>
-  <!-- SDK de Google Identity Services para OAuth en navegador -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; background: #0f172a; color: #f8fafc; }
     .card { background: #1e293b; padding: 1.2rem; border-radius: 10px; margin-bottom: 1rem; }
-    input, textarea, button { width: 100%; padding: 0.6rem; margin-top: 0.5rem; border-radius: 6px; border: 1px solid #334155; box-sizing: border-box; }
-    input, textarea { background: #0f172a; color: white; }
+    input, textarea, select, button { width: 100%; padding: 0.6rem; margin-top: 0.5rem; border-radius: 6px; border: 1px solid #334155; box-sizing: border-box; font-size: 0.95rem; }
+    input, textarea, select { background: #0f172a; color: white; }
     button { background: #06b6d4; color: #0f172a; font-weight: bold; cursor: pointer; border: none; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
-    button.danger { background: #ef4444; color: white; width: auto; padding: 0.4rem 0.8rem; }
+    button.secondary { background: #334155; color: #f8fafc; font-weight: normal; }
+    button.danger { background: #ef4444; color: white; width: auto; padding: 0.4rem 0.8rem; margin-top: 0; }
+    .fila-recordatorio { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+    .fila-recordatorio input, .fila-recordatorio select { margin-top: 0; }
     .evento { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid #334155; padding: 0.8rem 0; }
     .evento:last-child { border-bottom: none; }
     .hidden { display: none; }
@@ -23,27 +25,40 @@
 
   <h1>Agenda + Google Calendar</h1>
 
-  <!-- Botón de conexión con Google -->
   <div class="card">
     <button id="btn-auth">Conectar con Google Calendar</button>
     <p id="estado-auth" style="margin: 0.5rem 0 0; font-size: 0.9rem; color: #94a3b8;">Desconectado</p>
   </div>
 
-  <!-- Formulario para crear evento -->
   <form id="form-evento" class="card hidden">
     <h3>Nuevo Evento</h3>
     <input type="text" id="titulo" placeholder="Título del evento" required>
     <textarea id="descripcion" placeholder="Descripción (opcional)" rows="2"></textarea>
+    
     <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.5rem;">Inicio:</label>
     <input type="datetime-local" id="inicio" required>
+    
     <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.5rem;">Fin:</label>
     <input type="datetime-local" id="fin" required>
-    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.5rem;">Minutos de anticipación para la notificación:</label>
-    <input type="number" id="recordatorio" value="15" min="0" required>
-    <button type="submit" id="btn-guardar">Guardar en Web y Google Calendar</button>
+
+    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.8rem;">Notificaciones (máx. 5 por evento):</label>
+    <div id="contenedor-recordatorios">
+      <div class="fila-recordatorio">
+        <input type="number" class="rec-cantidad" value="15" min="0" required>
+        <select class="rec-unidad">
+          <option value="1" selected>Minutos antes</option>
+          <option value="60">Horas antes</option>
+          <option value="1440">Días antes</option>
+          <option value="10080">Semanas antes</option>
+        </select>
+        <button type="button" class="danger btn-quitar-rec" title="Quitar">✕</button>
+      </div>
+    </div>
+    <button type="button" id="btn-agregar-rec" class="secondary" style="margin-top: 0.5rem;">+ Agregar otra notificación</button>
+
+    <button type="submit" id="btn-guardar" style="margin-top: 1rem;">Guardar en Web y Google Calendar</button>
   </form>
 
-  <!-- Lista de eventos desde Firestore -->
   <div class="card">
     <h3>Mis Eventos</h3>
     <div id="lista-eventos">Cargando eventos...</div>

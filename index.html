@@ -3,33 +3,92 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Mi Agenda Sincronizada</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="manifest" href="manifest.json">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/es.global.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; background: #0f172a; color: #f8fafc; }
-    .card { background: #1e293b; padding: 1.2rem; border-radius: 10px; margin-bottom: 1rem; }
-    input, textarea, select, button { width: 100%; padding: 0.6rem; margin-top: 0.5rem; border-radius: 6px; border: 1px solid #334155; box-sizing: border-box; font-size: 0.95rem; }
-    input, textarea, select { background: #0f172a; color: white; }
-    button { background: #06b6d4; color: #0f172a; font-weight: bold; cursor: pointer; border: none; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    button.secondary { background: #334155; color: #f8fafc; font-weight: normal; }
-    button.edit { background: #f59e0b; color: #0f172a; width: auto; padding: 0.4rem 0.8rem; margin-top: 0; }
-    button.danger { background: #ef4444; color: white; width: auto; padding: 0.4rem 0.8rem; margin-top: 0; }
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --cyan: #06b6d4;
+      --cyan-bright: #22d3ee;
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 720px; margin: 1.5rem auto; padding: 0 1rem; background: var(--bg); color: var(--text); }
+    .header-app { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .header-app img { width: 38px; height: 38px; border-radius: 10px; }
+    .header-app h1 { margin: 0; font-size: 1.5rem; }
+    .card { background: var(--card); padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border: 1px solid rgba(51, 65, 85, 0.5); }
+    input, textarea, select, button { width: 100%; padding: 0.6rem; margin-top: 0.5rem; border-radius: 6px; border: 1px solid var(--border); box-sizing: border-box; font-size: 0.95rem; }
+    input, textarea, select { background: var(--bg); color: white; }
+    button { background: var(--cyan); color: var(--bg); font-weight: bold; cursor: pointer; border: none; transition: opacity 0.15s; }
+    button:hover { opacity: 0.92; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    button.secondary { background: var(--border); color: var(--text); font-weight: 500; }
+    button.edit { background: #f59e0b; color: var(--bg); width: auto; padding: 0.35rem 0.65rem; margin-top: 0; font-size: 0.82rem; }
+    button.clone { background: #38bdf8; color: var(--bg); width: auto; padding: 0.35rem 0.65rem; margin-top: 0; font-size: 0.82rem; }
+    button.danger { background: #ef4444; color: white; width: auto; padding: 0.35rem 0.65rem; margin-top: 0; font-size: 0.82rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 520px) { .grid-2 { grid-template-columns: 1fr; } }
     .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; cursor: pointer; font-size: 0.9rem; color: #cbd5e1; user-select: none; }
-    .checkbox-row input { width: auto; margin: 0; accent-color: #06b6d4; }
+    .checkbox-row input { width: auto; margin: 0; accent-color: var(--cyan); }
     .fila-recordatorio { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
     .fila-recordatorio input, .fila-recordatorio select { margin-top: 0; }
-    .evento { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid #334155; padding: 0.8rem 0; }
-    .evento:last-child { border-bottom: none; }
-    .acciones-evento { display: flex; gap: 0.4rem; flex-shrink: 0; }
-    .badge { display: inline-block; background: #0f172a; color: #38bdf8; font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid #334155; margin-left: 0.4rem; vertical-align: middle; }
-    .badge.anual { color: #a78bfa; border-color: #4c1d95; }
-    .hidden { display: none; }
+
+    /* Barra superior de sección Mis Eventos */
+    .eventos-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .eventos-header h3 { margin: 0; }
+    .vista-switch { display: flex; gap: 0.4rem; }
+    .vista-switch button { width: auto; margin: 0; padding: 0.4rem 0.85rem; font-size: 0.85rem; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .vista-switch button.active { background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
+
+    /* Filtros y búsqueda */
+    .filtros-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0.8rem; align-items: center; }
+    .filtro-pill { width: auto; margin: 0; padding: 0.32rem 0.75rem; font-size: 0.8rem; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
+    .filtro-pill.active { background: rgba(6, 182, 212, 0.18); color: var(--cyan-bright); border-color: var(--cyan); }
+    #btn-limpiar-pasados { width: auto; margin: 0 0 0 auto; padding: 0.32rem 0.7rem; font-size: 0.78rem; background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    /* Tarjetas de eventos */
+    .evento { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.8rem; background: rgba(15, 23, 42, 0.55); border: 1px solid var(--border); border-left: 4px solid var(--cyan); border-radius: 8px; padding: 0.85rem; margin-bottom: 0.65rem; transition: opacity 0.2s; }
+    .evento.pasado { opacity: 0.58; }
+    .evento-info { flex: 1; min-width: 0; }
+    .acciones-evento { display: flex; flex-wrap: wrap; gap: 0.35rem; flex-shrink: 0; }
+    .badge { display: inline-block; background: var(--bg); color: #cbd5e1; font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid var(--border); margin-left: 0.35rem; vertical-align: middle; }
+    .badge.anual { color: #c4b5fd; border-color: #5b21b6; }
+    .badge-cat { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.73rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--border); margin-right: 0.4rem; }
+    .punto-cat { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+    /* Contador dinámico resaltado en cyan */
+    .countdown-pill { display: inline-block; margin-top: 0.35rem; padding: 0.18rem 0.55rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; color: var(--cyan-bright); background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.45); letter-spacing: 0.01em; }
+    .countdown-pill.inminente { background: rgba(6, 182, 212, 0.26); border-color: var(--cyan-bright); box-shadow: 0 0 10px rgba(6, 182, 212, 0.22); }
+    .countdown-pill.pasado { color: var(--muted); background: rgba(51, 65, 85, 0.35); border-color: var(--border); font-weight: 500; box-shadow: none; }
+
+    /* Ajustes modo oscuro para FullCalendar */
+    #calendario-container { margin-top: 0.5rem; }
+    .fc { --fc-border-color: #334155; --fc-page-bg-color: #0f172a; --fc-neutral-bg-color: #1e293b; --fc-today-bg-color: rgba(6, 182, 212, 0.14); --fc-button-bg-color: #334155; --fc-button-border-color: #475569; --fc-button-hover-bg-color: #06b6d4; --fc-button-hover-border-color: #06b6d4; --fc-button-active-bg-color: #06b6d4; --fc-button-active-border-color: #06b6d4; font-size: 0.88rem; }
+    .fc .fc-toolbar-title { font-size: 1.1rem; text-transform: capitalize; }
+    .fc .fc-button { text-transform: capitalize; font-weight: 600; }
+    .fc .fc-button-primary:hover, .fc .fc-button-primary.fc-button-active { color: #0f172a; }
+    .fc-daygrid-day:hover { background: rgba(6, 182, 212, 0.06); cursor: pointer; }
+    .fc-event { cursor: pointer; border-radius: 4px; padding: 1px 4px; font-weight: 500; }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
-  <h1>Agenda + Google Calendar</h1>
+  <div class="header-app">
+    <img src="icon.svg" alt="Logo Agenda">
+    <h1>Agenda + Google Calendar</h1>
+  </div>
 
   <div class="card">
     <button id="btn-auth">Conectar con Google Calendar</button>
@@ -37,9 +96,19 @@
   </div>
 
   <form id="form-evento" class="card hidden">
-    <h3 id="titulo-formulario">Nuevo Evento</h3>
+    <h3 id="titulo-formulario" style="margin-top:0;">Nuevo Evento</h3>
     <input type="text" id="titulo" placeholder="Título del evento" required>
     <textarea id="descripcion" placeholder="Descripción (opcional)" rows="2"></textarea>
+
+    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.7rem;">Categoría (sincroniza color en Google Calendar):</label>
+    <select id="categoria">
+      <option value="personal">Personal (Cyan)</option>
+      <option value="universidad">Universidad / Evaluaciones (Azul)</option>
+      <option value="cumpleanos">Cumpleaños / Aniversario (Morado)</option>
+      <option value="tramites">Trámites / Pagos (Amarillo)</option>
+      <option value="salud">Entrenamiento / Salud (Verde)</option>
+      <option value="urgente">Urgente / Importante (Rojo)</option>
+    </select>
 
     <label class="checkbox-row">
       <input type="checkbox" id="todo-el-dia">
@@ -51,11 +120,16 @@
       Repetir todos los años (ej. cumpleaños o aniversarios)
     </label>
     
-    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.7rem;">Inicio:</label>
-    <input type="datetime-local" id="inicio" required>
-    
-    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.6rem;">Fin:</label>
-    <input type="datetime-local" id="fin" required>
+    <div class="grid-2" style="margin-top: 0.3rem;">
+      <div>
+        <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.5rem;">Inicio:</label>
+        <input type="datetime-local" id="inicio" required>
+      </div>
+      <div>
+        <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.5rem;">Fin:</label>
+        <input type="datetime-local" id="fin" required>
+      </div>
+    </div>
 
     <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.8rem;">Notificaciones (máx. 5 por evento):</label>
     <div id="contenedor-recordatorios">
@@ -77,10 +151,34 @@
   </form>
 
   <div class="card">
-    <h3>Mis Eventos</h3>
-    <div id="lista-eventos">Cargando eventos...</div>
+    <div class="eventos-header">
+      <h3>Mis Eventos</h3>
+      <div class="vista-switch">
+        <button type="button" id="btn-vista-lista" class="active">Lista</button>
+        <button type="button" id="btn-vista-calendario">Calendario</button>
+      </div>
+    </div>
+
+    <!-- Vista Lista -->
+    <div id="panel-lista">
+      <input type="search" id="buscador-eventos" placeholder="Buscar por título o descripción..." style="margin-top: 0;">
+      <div class="filtros-bar" id="filtros-tiempo">
+        <button type="button" class="filtro-pill active" data-filtro="todos">Todos</button>
+        <button type="button" class="filtro-pill" data-filtro="proximos">Próximos</button>
+        <button type="button" class="filtro-pill" data-filtro="anuales">Anuales</button>
+        <button type="button" class="filtro-pill" data-filtro="pasados">Pasados</button>
+        <button type="button" id="btn-limpiar-pasados" class="hidden">Limpiar pasados</button>
+      </div>
+      <div id="lista-eventos">Cargando eventos...</div>
+    </div>
+
+    <!-- Vista Calendario Mensual -->
+    <div id="panel-calendario" class="hidden">
+      <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 0.6rem;">Haz clic en un día vacío para agendar o sobre un evento para editarlo.</p>
+      <div id="calendario-container"></div>
+    </div>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>

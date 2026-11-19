@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { 
-  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy 
+  getFirestore, collection, addDoc, setDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy 
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // 1. Configuración de Firebase
@@ -16,16 +16,32 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const eventosRef = collection(db, "agenda_eventos");
+const categoriasRef = collection(db, "agenda_categorias");
 
-// Catálogo de categorías con colorId oficial de Google Calendar
-const CATEGORIAS = {
-  personal:    { nombre: "Personal",               colorId: "7",  hex: "#06b6d4" },
-  universidad: { nombre: "Universidad",            colorId: "9",  hex: "#3b82f6" },
-  cumpleanos:  { nombre: "Cumpleaños / Aniv.",     colorId: "3",  hex: "#a855f7" },
-  tramites:    { nombre: "Trámites / Pagos",       colorId: "5",  hex: "#eab308" },
-  salud:       { nombre: "Entrenamiento / Salud",  colorId: "10", hex: "#22c55e" },
-  urgente:     { nombre: "Urgente",                colorId: "11", hex: "#ef4444" }
-};
+// Paleta oficial de 11 colores soportados por la API de Google Calendar
+const GOOGLE_COLORES = [
+  { colorId: "7",  nombre: "Pavo real (Cyan)",    hex: "#039be5" },
+  { colorId: "9",  nombre: "Arándano (Azul)",     hex: "#3f51b5" },
+  { colorId: "3",  nombre: "Uva (Morado)",        hex: "#8e24aa" },
+  { colorId: "1",  nombre: "Lavanda",             hex: "#7986cb" },
+  { colorId: "4",  nombre: "Flamenco (Rosa)",     hex: "#e67c73" },
+  { colorId: "11", nombre: "Tomate (Rojo)",       hex: "#d50000" },
+  { colorId: "6",  nombre: "Mandarina (Naranja)", hex: "#f4511e" },
+  { colorId: "5",  nombre: "Plátano (Amarillo)",  hex: "#f6bf26" },
+  { colorId: "2",  nombre: "Salvia (Verde claro)",hex: "#33b679" },
+  { colorId: "10", nombre: "Albahaca (Verde)",    hex: "#0b8043" },
+  { colorId: "8",  nombre: "Grafito (Gris)",      hex: "#616161" }
+];
+
+// Categorías base que se crean automáticamente la primera vez (y luego puedes editar/borrar)
+const CATEGORIAS_INICIALES = [
+  { id: "personal",    nombre: "Personal",              colorId: "7",  hex: "#039be5" },
+  { id: "universidad", nombre: "Universidad",           colorId: "9",  hex: "#3f51b5" },
+  { id: "cumpleanos",  nombre: "Cumpleaños / Aniv.",    colorId: "3",  hex: "#8e24aa" },
+  { id: "tramites",    nombre: "Trámites / Pagos",      colorId: "5",  hex: "#f6bf26" },
+  { id: "salud",       nombre: "Entrenamiento / Salud", colorId: "10", hex: "#0b8043" },
+  { id: "urgente",     nombre: "Urgente",               colorId: "11", hex: "#d50000" }
+];
 
 // 2. Configuración de Google OAuth
 const CLIENT_ID = "323003418610-kr36vhmj09e7pfp5g8j0bih6p65g6u0q.apps.googleusercontent.com";
@@ -34,10 +50,15 @@ const SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.goog
 let tokenClient;
 let accessToken = null;
 let eventoEnEdicion = null;
+let categoriaEnEdicionId = null;
+let colorSeleccionado = GOOGLE_COLORES[0];
+let categoriasCache = [];
 let eventosCache = [];
 let filtroActual = "todos";
+let filtroCategoriaActual = "todas";
 let textoBusqueda = "";
 let fullCalendarInstance = null;
+let semillaCategoriasIntentada = false;
 
 // Referencias DOM
 const btnAuth = document.getElementById("btn-auth");
@@ -52,10 +73,23 @@ const btnAgregarRec = document.getElementById("btn-agregar-rec");
 const inputInicio = document.getElementById("inicio");
 const inputFin = document.getElementById("fin");
 const selectCategoria = document.getElementById("categoria");
+const selectFiltroCategoria = document.getElementById("filtro-categoria");
 const checkTodoElDia = document.getElementById("todo-el-dia");
 const checkRepetirAnual = document.getElementById("repetir-anual");
 const buscadorEventos = document.getElementById("buscador-eventos");
 const btnLimpiarPasados = document.getElementById("btn-limpiar-pasados");
+
+// Referencias DOM Gestor de Categorías
+const panelCategorias = document.getElementById("panel-categorias");
+const btnToggleCategorias = document.getElementById("btn-toggle-categorias");
+const btnCerrarCategorias = document.getElementById("btn-cerrar-categorias");
+const tituloFormCat = document.getElementById("titulo-form-cat");
+const inputCatNombre = document.getElementById("cat-nombre");
+const catColorLabel = document.getElementById("cat-color-label");
+const paletaColoresDiv = document.getElementById("paleta-colores");
+const btnGuardarCategoria = document.getElementById("btn-guardar-categoria");
+const btnCancelarCat = document.getElementById("btn-cancelar-cat");
+const listaCategoriasAdmin = document.getElementById("lista-categorias-admin");
 
 async function guardarCorreoUsuario(token) {
   if (localStorage.getItem("gcal_user_email")) return;
@@ -124,14 +158,206 @@ btnAuth.onclick = () => {
   }
 };
 
-// 3. Helpers de fechas, categorías y cuenta regresiva
-function obtenerCategoriaEvento(ev) {
-  if (ev.categoria && CATEGORIAS[ev.categoria]) return { key: ev.categoria, ...CATEGORIAS[ev.categoria] };
-  if (ev.repetirAnual || (ev.descripcion && ev.descripcion.toLowerCase().includes("cumple"))) {
-    return { key: "cumpleanos", ...CATEGORIAS.cumpleanos };
-  }
-  return { key: "personal", ...CATEGORIAS.personal };
+// =========================================================================
+// 3. GESTIÓN COMPLETA DE CATEGORÍAS (CREAR, EDITAR, ELIMINAR)
+// =========================================================================
+
+function renderizarPaletaColores() {
+  paletaColoresDiv.innerHTML = "";
+  GOOGLE_COLORES.forEach((col) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `swatch-color ${col.colorId === colorSeleccionado.colorId ? "selected" : ""}`;
+    btn.style.backgroundColor = col.hex;
+    btn.title = col.nombre;
+    btn.onclick = () => {
+      colorSeleccionado = col;
+      catColorLabel.textContent = col.nombre;
+      renderizarPaletaColores();
+    };
+    paletaColoresDiv.appendChild(btn);
+  });
 }
+
+renderizarPaletaColores();
+
+btnToggleCategorias.onclick = () => {
+  panelCategorias.classList.toggle("hidden");
+};
+
+btnCerrarCategorias.onclick = () => {
+  panelCategorias.classList.add("hidden");
+  resetearFormularioCategoria();
+};
+
+function resetearFormularioCategoria() {
+  categoriaEnEdicionId = null;
+  inputCatNombre.value = "";
+  tituloFormCat.textContent = "Administrar Categorías";
+  btnGuardarCategoria.textContent = "+ Crear Categoría";
+  btnCancelarCat.classList.add("hidden");
+  colorSeleccionado = GOOGLE_COLORES[0];
+  catColorLabel.textContent = colorSeleccionado.nombre;
+  renderizarPaletaColores();
+}
+
+btnCancelarCat.onclick = resetearFormularioCategoria;
+
+btnGuardarCategoria.onclick = async () => {
+  const nombre = inputCatNombre.value.trim();
+  if (!nombre) return alert("Escribe un nombre para la categoría.");
+
+  btnGuardarCategoria.disabled = true;
+  try {
+    const payload = {
+      nombre,
+      colorId: colorSeleccionado.colorId,
+      hex: colorSeleccionado.hex
+    };
+
+    if (categoriaEnEdicionId) {
+      await updateDoc(doc(db, "agenda_categorias", categoriaEnEdicionId), payload);
+    } else {
+      payload.creadoEn = new Date().toISOString();
+      const nuevoDoc = await addDoc(categoriasRef, payload);
+      selectCategoria.value = nuevoDoc.id;
+    }
+    resetearFormularioCategoria();
+  } catch (err) {
+    console.error(err);
+    alert("Error al guardar categoría. Verifica que hayas actualizado las reglas de Firestore para 'agenda_categorias'.");
+  } finally {
+    btnGuardarCategoria.disabled = false;
+  }
+};
+
+function renderizarUI_Categorias() {
+  const valorSeleccionadoForm = selectCategoria.value;
+  const valorSeleccionadoFiltro = selectFiltroCategoria.value;
+
+  // 1. Rellenar selector del formulario de eventos
+  selectCategoria.innerHTML = "";
+  categoriasCache.forEach((cat) => {
+    const opt = document.createElement("option");
+    opt.value = cat.id;
+    opt.textContent = cat.nombre;
+    selectCategoria.appendChild(opt);
+  });
+  if (categoriasCache.some((c) => c.id === valorSeleccionadoForm)) {
+    selectCategoria.value = valorSeleccionadoForm;
+  }
+
+  // 2. Rellenar selector de filtro en Mis Eventos
+  selectFiltroCategoria.innerHTML = `<option value="todas">Todas las categorías</option>`;
+  categoriasCache.forEach((cat) => {
+    const opt = document.createElement("option");
+    opt.value = cat.id;
+    opt.textContent = cat.nombre;
+    selectFiltroCategoria.appendChild(opt);
+  });
+  if (valorSeleccionadoFiltro === "todas" || categoriasCache.some((c) => c.id === valorSeleccionadoFiltro)) {
+    selectFiltroCategoria.value = valorSeleccionadoFiltro;
+  } else {
+    filtroCategoriaActual = "todas";
+  }
+
+  // 3. Rellenar lista administrativa dentro del panel de categorías
+  listaCategoriasAdmin.innerHTML = "";
+  categoriasCache.forEach((cat) => {
+    const row = document.createElement("div");
+    row.className = "item-categoria";
+    row.innerHTML = `
+      <div class="item-categoria-info">
+        <span class="punto-cat" style="background:${cat.hex}; width:11px; height:11px;"></span>
+        <span>${cat.nombre}</span>
+      </div>
+      <div style="display:flex; gap:0.35rem;">
+        <button type="button" class="edit btn-edit-cat">Editar</button>
+        <button type="button" class="danger btn-del-cat">Eliminar</button>
+      </div>
+    `;
+
+    row.querySelector(".btn-edit-cat").onclick = () => {
+      categoriaEnEdicionId = cat.id;
+      inputCatNombre.value = cat.nombre;
+      tituloFormCat.textContent = `Editando: ${cat.nombre}`;
+      btnGuardarCategoria.textContent = "Guardar Cambios";
+      btnCancelarCat.classList.remove("hidden");
+      colorSeleccionado = GOOGLE_COLORES.find((c) => c.colorId === cat.colorId) || GOOGLE_COLORES[0];
+      catColorLabel.textContent = colorSeleccionado.nombre;
+      renderizarPaletaColores();
+      inputCatNombre.focus();
+    };
+
+    row.querySelector(".btn-del-cat").onclick = async () => {
+      if (categoriasCache.length <= 1) {
+        return alert("Debes mantener al menos una categoría activa.");
+      }
+      if (!confirm(`¿Eliminar la categoría "${cat.nombre}"? Los eventos que la tenían seguirán existiendo.`)) return;
+
+      try {
+        await deleteDoc(doc(db, "agenda_categorias", cat.id));
+        if (categoriaEnEdicionId === cat.id) resetearFormularioCategoria();
+      } catch (err) {
+        console.error(err);
+        alert("No se pudo eliminar la categoría.");
+      }
+    };
+
+    listaCategoriasAdmin.appendChild(row);
+  });
+}
+
+function obtenerCategoriaEvento(ev) {
+  if (ev.categoria) {
+    const encontrada = categoriasCache.find((c) => c.id === ev.categoria);
+    if (encontrada) return encontrada;
+  }
+  if (categoriasCache.length > 0) {
+    return categoriasCache[0];
+  }
+  return { id: "default", nombre: "General", colorId: "7", hex: "#039be5" };
+}
+
+// Suscripción en tiempo real a agenda_categorias
+const qCategorias = query(categoriasRef, orderBy("nombre", "asc"));
+
+onSnapshot(qCategorias, async (snapshot) => {
+  if (snapshot.empty && !semillaCategoriasIntentada) {
+    semillaCategoriasIntentada = true;
+    try {
+      for (const base of CATEGORIAS_INICIALES) {
+        await setDoc(doc(db, "agenda_categorias", base.id), {
+          nombre: base.nombre,
+          colorId: base.colorId,
+          hex: base.hex,
+          creadoEn: new Date().toISOString()
+        });
+      }
+      return;
+    } catch (e) {
+      console.warn("Usando categorías locales (actualiza tus reglas de Firestore para guardar personalizadas):", e);
+      categoriasCache = [...CATEGORIAS_INICIALES];
+      renderizarUI_Categorias();
+      return;
+    }
+  }
+
+  categoriasCache = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (categoriasCache.length === 0) {
+    categoriasCache = [...CATEGORIAS_INICIALES];
+  }
+
+  renderizarUI_Categorias();
+  if (eventosCache.length > 0) {
+    renderizarListaEventos();
+    if (!panelCalendario.classList.contains("hidden")) actualizarFullCalendar();
+  }
+});
+
+// =========================================================================
+// 4. HELPERS DE FECHAS Y CUENTA REGRESIVA EN CYAN
+// =========================================================================
 
 function actualizarTipoInputsFecha(esTodoElDia) {
   inputInicio.type = esTodoElDia ? "date" : "datetime-local";
@@ -171,7 +397,6 @@ function isoALocalInput(isoStr) {
   return new Date(fecha - offset).toISOString().slice(0, 16);
 }
 
-// Calcula la próxima ocurrencia (si es anual, proyecta al año actual o siguiente)
 function obtenerOcurrenciaRelevante(ev) {
   const ahora = new Date();
   let inicioDate = ev.todoElDia ? new Date(`${ev.inicio.slice(0, 10)}T00:00:00`) : new Date(ev.inicio);
@@ -190,7 +415,6 @@ function obtenerOcurrenciaRelevante(ev) {
   return { inicioDate, finDate };
 }
 
-// Calcula el texto y estado del contador dinámico en cyan
 function calcularCuentaRegresiva(ev) {
   const ahora = new Date();
   const { inicioDate, finDate } = obtenerOcurrenciaRelevante(ev);
@@ -222,7 +446,10 @@ function calcularCuentaRegresiva(ev) {
   return { texto: `Faltan ${diffDias} días`, esPasado: false, esInminente: false, sortTime: inicioDate.getTime() };
 }
 
-// 4. Gestión de notificaciones múltiples
+// =========================================================================
+// 5. NOTIFICACIONES MÚLTIPLES
+// =========================================================================
+
 function crearFilaRecordatorio(cantidad = 15, unidad = "1") {
   const div = document.createElement("div");
   div.className = "fila-recordatorio";
@@ -275,7 +502,10 @@ function formatearAnticipacion(minutosTotales) {
   return `${minutosTotales} min antes`;
 }
 
-// 5. Cargar evento en el formulario (para Editar o Duplicar)
+// =========================================================================
+// 6. CRUD DE EVENTOS (CREAR, EDITAR, DUPLICAR, ELIMINAR)
+// =========================================================================
+
 function cargarEventoEnFormulario(docId, ev, esEdicion = true) {
   if (!accessToken) {
     return alert("Conecta tu cuenta de Google primero para poder gestionar eventos.");
@@ -296,7 +526,7 @@ function cargarEventoEnFormulario(docId, ev, esEdicion = true) {
   const cat = obtenerCategoriaEvento(ev);
   document.getElementById("titulo").value = ev.titulo || "";
   document.getElementById("descripcion").value = ev.descripcion || "";
-  selectCategoria.value = cat.key;
+  selectCategoria.value = cat.id;
   checkTodoElDia.checked = Boolean(ev.todoElDia);
   checkRepetirAnual.checked = Boolean(ev.repetirAnual);
 
@@ -343,15 +573,14 @@ function resetearFormulario() {
 
 btnCancelarEdicion.onclick = resetearFormulario;
 
-// 6. Guardar o Actualizar evento en Google Calendar y Firestore
 formEvento.onsubmit = async (e) => {
   e.preventDefault();
   if (!accessToken) return alert("Primero conecta tu cuenta de Google.");
 
   const titulo = document.getElementById("titulo").value.trim();
   const descripcion = document.getElementById("descripcion").value.trim();
-  const categoriaKey = selectCategoria.value;
-  const catInfo = CATEGORIAS[categoriaKey] || CATEGORIAS.personal;
+  const categoriaId = selectCategoria.value;
+  const catInfo = categoriasCache.find((c) => c.id === categoriaId) || { colorId: "7" };
   const inicioVal = inputInicio.value;
   const finVal = inputFin.value;
   const esTodoElDia = checkTodoElDia.checked;
@@ -447,7 +676,7 @@ formEvento.onsubmit = async (e) => {
     const datosFirestore = {
       titulo,
       descripcion,
-      categoria: categoriaKey,
+      categoria: categoriaId,
       todoElDia: esTodoElDia,
       repetirAnual: esAnual,
       inicio: inicioFirestore,
@@ -474,11 +703,13 @@ formEvento.onsubmit = async (e) => {
   }
 };
 
-// 7. Renderizado de Lista con Filtros, Búsqueda y Contador Dinámico en Cyan
+// =========================================================================
+// 7. LISTA DE EVENTOS, FILTROS Y CONTADOR DINÁMICO EN CYAN
+// =========================================================================
+
 function renderizarListaEventos() {
   listaEventos.innerHTML = "";
 
-  // Enriquecer cada evento con cuenta regresiva y ordenarlos por proximidad real
   const procesados = eventosCache.map((item) => {
     const countdown = calcularCuentaRegresiva(item.data);
     return { ...item, countdown };
@@ -494,6 +725,10 @@ function renderizarListaEventos() {
     if (filtroActual === "proximos" && countdown.esPasado) return false;
     if (filtroActual === "anuales" && !ev.repetirAnual) return false;
     if (filtroActual === "pasados" && !countdown.esPasado) return false;
+
+    if (filtroCategoriaActual !== "todas" && ev.categoria !== filtroCategoriaActual) {
+      return false;
+    }
 
     if (textoBusqueda) {
       const q = textoBusqueda.toLowerCase();
@@ -598,9 +833,13 @@ function renderizarListaEventos() {
   });
 }
 
-// Eventos de filtros, búsqueda y limpieza de pasados
 buscadorEventos.addEventListener("input", (e) => {
   textoBusqueda = e.target.value.trim();
+  renderizarListaEventos();
+});
+
+selectFiltroCategoria.addEventListener("change", (e) => {
+  filtroCategoriaActual = e.target.value;
   renderizarListaEventos();
 });
 
@@ -623,12 +862,14 @@ btnLimpiarPasados.onclick = async () => {
   }
 };
 
-// Actualizar contadores en tiempo real cada minuto
 setInterval(() => {
   if (eventosCache.length > 0) renderizarListaEventos();
 }, 60000);
 
-// 8. Vista Calendario Mensual Interactivo (FullCalendar)
+// =========================================================================
+// 8. VISTA CALENDARIO MENSUAL INTERACTIVO (FULLCALENDAR)
+// =========================================================================
+
 function construirEventosFullCalendar() {
   const eventosFC = [];
   const anioActual = new Date().getFullYear();
@@ -719,7 +960,6 @@ function actualizarFullCalendar() {
   }
 }
 
-// Alternar pestañas Lista / Calendario
 const btnVistaLista = document.getElementById("btn-vista-lista");
 const btnVistaCalendario = document.getElementById("btn-vista-calendario");
 const panelLista = document.getElementById("panel-lista");

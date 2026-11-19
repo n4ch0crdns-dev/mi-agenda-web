@@ -43,6 +43,21 @@
     .fila-recordatorio { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
     .fila-recordatorio input, .fila-recordatorio select { margin-top: 0; }
 
+    /* Selector de categoría + botón gestionar */
+    .categoria-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
+    .categoria-row select { margin-top: 0; }
+    .categoria-row button { width: auto; margin-top: 0; padding: 0.6rem 0.9rem; font-size: 0.88rem; }
+
+    /* Panel gestor de categorías */
+    .panel-categorias { background: rgba(15, 23, 42, 0.75); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-top: 0.75rem; }
+    .panel-categorias h4 { margin: 0 0 0.6rem; font-size: 0.95rem; color: var(--cyan-bright); }
+    .paleta-colores { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.6rem 0; }
+    .swatch-color { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; padding: 0; margin: 0; transition: transform 0.12s; }
+    .swatch-color:hover { transform: scale(1.12); }
+    .swatch-color.selected { border-color: #ffffff; box-shadow: 0 0 0 2px var(--cyan); transform: scale(1.12); }
+    .item-categoria { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.45rem 0.6rem; background: var(--card); border: 1px solid var(--border); border-radius: 6px; margin-top: 0.4rem; font-size: 0.88rem; }
+    .item-categoria-info { display: flex; align-items: center; gap: 0.5rem; }
+
     /* Barra superior de sección Mis Eventos */
     .eventos-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
     .eventos-header h3 { margin: 0; }
@@ -51,6 +66,9 @@
     .vista-switch button.active { background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
 
     /* Filtros y búsqueda */
+    .busqueda-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 0.5rem; }
+    @media (max-width: 520px) { .busqueda-grid { grid-template-columns: 1fr; } }
+    .busqueda-grid input, .busqueda-grid select { margin-top: 0; }
     .filtros-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0.8rem; align-items: center; }
     .filtro-pill { width: auto; margin: 0; padding: 0.32rem 0.75rem; font-size: 0.8rem; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
     .filtro-pill.active { background: rgba(6, 182, 212, 0.18); color: var(--cyan-bright); border-color: var(--cyan); }
@@ -64,7 +82,7 @@
     .badge { display: inline-block; background: var(--bg); color: #cbd5e1; font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid var(--border); margin-left: 0.35rem; vertical-align: middle; }
     .badge.anual { color: #c4b5fd; border-color: #5b21b6; }
     .badge-cat { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.73rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--border); margin-right: 0.4rem; }
-    .punto-cat { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .punto-cat { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
     /* Contador dinámico resaltado en cyan */
     .countdown-pill { display: inline-block; margin-top: 0.35rem; padding: 0.18rem 0.55rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; color: var(--cyan-bright); background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.45); letter-spacing: 0.01em; }
@@ -101,14 +119,29 @@
     <textarea id="descripcion" placeholder="Descripción (opcional)" rows="2"></textarea>
 
     <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.7rem;">Categoría (sincroniza color en Google Calendar):</label>
-    <select id="categoria">
-      <option value="personal">Personal (Cyan)</option>
-      <option value="universidad">Universidad / Evaluaciones (Azul)</option>
-      <option value="cumpleanos">Cumpleaños / Aniversario (Morado)</option>
-      <option value="tramites">Trámites / Pagos (Amarillo)</option>
-      <option value="salud">Entrenamiento / Salud (Verde)</option>
-      <option value="urgente">Urgente / Importante (Rojo)</option>
-    </select>
+    <div class="categoria-row">
+      <select id="categoria"></select>
+      <button type="button" id="btn-toggle-categorias" class="secondary">⚙ Gestionar</button>
+    </div>
+
+    <!-- Gestor de Categorías (Crear / Editar / Eliminar) -->
+    <div id="panel-categorias" class="panel-categorias hidden">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h4 id="titulo-form-cat">Administrar Categorías</h4>
+        <button type="button" id="btn-cerrar-categorias" class="secondary" style="width:auto; margin:0; padding:0.2rem 0.55rem; font-size:0.8rem;">Cerrar</button>
+      </div>
+      
+      <input type="text" id="cat-nombre" placeholder="Nombre de la categoría (ej. Gimnasio, Proyecto, Citas)">
+      <label style="font-size: 0.8rem; color: #94a3b8; display:block; margin-top:0.5rem;">Color compatible con Google Calendar: <strong id="cat-color-label" style="color:#f8fafc;">Pavo real (Cyan)</strong></label>
+      <div id="paleta-colores" class="paleta-colores"></div>
+
+      <div style="display:flex; gap:0.5rem; margin-top:0.4rem;">
+        <button type="button" id="btn-guardar-categoria" style="margin-top:0;">+ Crear Categoría</button>
+        <button type="button" id="btn-cancelar-cat" class="secondary hidden" style="margin-top:0; width:auto;">Cancelar</button>
+      </div>
+
+      <div id="lista-categorias-admin" style="margin-top:0.8rem;"></div>
+    </div>
 
     <label class="checkbox-row">
       <input type="checkbox" id="todo-el-dia">
@@ -161,7 +194,12 @@
 
     <!-- Vista Lista -->
     <div id="panel-lista">
-      <input type="search" id="buscador-eventos" placeholder="Buscar por título o descripción..." style="margin-top: 0;">
+      <div class="busqueda-grid">
+        <input type="search" id="buscador-eventos" placeholder="Buscar por título o descripción...">
+        <select id="filtro-categoria">
+          <option value="todas">Todas las categorías</option>
+        </select>
+      </div>
       <div class="filtros-bar" id="filtros-tiempo">
         <button type="button" class="filtro-pill active" data-filtro="todos">Todos</button>
         <button type="button" class="filtro-pill" data-filtro="proximos">Próximos</button>
@@ -179,6 +217,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3"></script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>

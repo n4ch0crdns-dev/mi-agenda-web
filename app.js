@@ -33,7 +33,6 @@ const GOOGLE_COLORES = [
   { colorId: "8",  nombre: "Grafito (Gris)",      hex: "#616161" }
 ];
 
-// Categorías base que se crean automáticamente la primera vez (y luego puedes editar/borrar)
 const CATEGORIAS_INICIALES = [
   { id: "personal",    nombre: "Personal",              colorId: "7",  hex: "#039be5" },
   { id: "universidad", nombre: "Universidad",           colorId: "9",  hex: "#3f51b5" },
@@ -42,6 +41,9 @@ const CATEGORIAS_INICIALES = [
   { id: "salud",       nombre: "Entrenamiento / Salud", colorId: "10", hex: "#0b8043" },
   { id: "urgente",     nombre: "Urgente",               colorId: "11", hex: "#d50000" }
 ];
+
+const MAPA_DIAS_JS = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+const NOMBRES_DIAS = { MO: "Lun", TU: "Mar", WE: "Mié", TH: "Jue", FR: "Vie", SA: "Sáb", SU: "Dom" };
 
 // 2. Configuración de Google OAuth
 const CLIENT_ID = "323003418610-kr36vhmj09e7pfp5g8j0bih6p65g6u0q.apps.googleusercontent.com";
@@ -62,6 +64,7 @@ let semillaCategoriasIntentada = false;
 
 // Referencias DOM
 const btnAuth = document.getElementById("btn-auth");
+const btnSyncGoogle = document.getElementById("btn-sync-google");
 const estadoAuth = document.getElementById("estado-auth");
 const formEvento = document.getElementById("form-evento");
 const tituloFormulario = document.getElementById("titulo-formulario");
@@ -70,12 +73,15 @@ const btnCancelarEdicion = document.getElementById("btn-cancelar-edicion");
 const listaEventos = document.getElementById("lista-eventos");
 const contenedorRec = document.getElementById("contenedor-recordatorios");
 const btnAgregarRec = document.getElementById("btn-agregar-rec");
+const contenedorSubtareas = document.getElementById("contenedor-subtareas");
+const btnAgregarSubtarea = document.getElementById("btn-agregar-subtarea");
 const inputInicio = document.getElementById("inicio");
 const inputFin = document.getElementById("fin");
 const selectCategoria = document.getElementById("categoria");
 const selectFiltroCategoria = document.getElementById("filtro-categoria");
 const checkTodoElDia = document.getElementById("todo-el-dia");
-const checkRepetirAnual = document.getElementById("repetir-anual");
+const selectRepeticion = document.getElementById("repeticion");
+const contenedorDiasSemana = document.getElementById("contenedor-dias-semana");
 const buscadorEventos = document.getElementById("buscador-eventos");
 const btnLimpiarPasados = document.getElementById("btn-limpiar-pasados");
 
@@ -104,17 +110,21 @@ async function guardarCorreoUsuario(token) {
   }
 }
 
+function activarInterfazConectada() {
+  estadoAuth.textContent = "Conectado a Google Calendar";
+  estadoAuth.style.color = "#4ade80";
+  btnAuth.textContent = "Renovar sesión de Google";
+  btnSyncGoogle.classList.remove("hidden");
+  formEvento.classList.remove("hidden");
+}
+
 function establecerSesionConectada(token, expiresInSeconds = 3500) {
   accessToken = token;
   const expiraEn = Date.now() + (expiresInSeconds - 60) * 1000;
   localStorage.setItem("gcal_token", token);
   localStorage.setItem("gcal_expira", expiraEn.toString());
   guardarCorreoUsuario(token);
-
-  estadoAuth.textContent = "Conectado a Google Calendar";
-  estadoAuth.style.color = "#4ade80";
-  btnAuth.textContent = "Renovar sesión de Google";
-  formEvento.classList.remove("hidden");
+  activarInterfazConectada();
 }
 
 function verificarSesionGuardada() {
@@ -123,10 +133,7 @@ function verificarSesionGuardada() {
 
   if (tokenGuardado && Date.now() < expiraGuardado) {
     accessToken = tokenGuardado;
-    estadoAuth.textContent = "Conectado a Google Calendar";
-    estadoAuth.style.color = "#4ade80";
-    btnAuth.textContent = "Renovar sesión de Google";
-    formEvento.classList.remove("hidden");
+    activarInterfazConectada();
     return true;
   }
   return false;
@@ -159,7 +166,7 @@ btnAuth.onclick = () => {
 };
 
 // =========================================================================
-// 3. GESTIÓN COMPLETA DE CATEGORÍAS (CREAR, EDITAR, ELIMINAR)
+// 3. GESTIÓN DE CATEGORÍAS (CREAR, EDITAR, ELIMINAR)
 // =========================================================================
 
 function renderizarPaletaColores() {
@@ -181,10 +188,7 @@ function renderizarPaletaColores() {
 
 renderizarPaletaColores();
 
-btnToggleCategorias.onclick = () => {
-  panelCategorias.classList.toggle("hidden");
-};
-
+btnToggleCategorias.onclick = () => panelCategorias.classList.toggle("hidden");
 btnCerrarCategorias.onclick = () => {
   panelCategorias.classList.add("hidden");
   resetearFormularioCategoria();
@@ -225,7 +229,7 @@ btnGuardarCategoria.onclick = async () => {
     resetearFormularioCategoria();
   } catch (err) {
     console.error(err);
-    alert("Error al guardar categoría. Verifica que hayas actualizado las reglas de Firestore para 'agenda_categorias'.");
+    alert("Error al guardar categoría. Verifica las reglas de Firestore para 'agenda_categorias'.");
   } finally {
     btnGuardarCategoria.disabled = false;
   }
@@ -235,7 +239,6 @@ function renderizarUI_Categorias() {
   const valorSeleccionadoForm = selectCategoria.value;
   const valorSeleccionadoFiltro = selectFiltroCategoria.value;
 
-  // 1. Rellenar selector del formulario de eventos
   selectCategoria.innerHTML = "";
   categoriasCache.forEach((cat) => {
     const opt = document.createElement("option");
@@ -247,7 +250,6 @@ function renderizarUI_Categorias() {
     selectCategoria.value = valorSeleccionadoForm;
   }
 
-  // 2. Rellenar selector de filtro en Mis Eventos
   selectFiltroCategoria.innerHTML = `<option value="todas">Todas las categorías</option>`;
   categoriasCache.forEach((cat) => {
     const opt = document.createElement("option");
@@ -261,7 +263,6 @@ function renderizarUI_Categorias() {
     filtroCategoriaActual = "todas";
   }
 
-  // 3. Rellenar lista administrativa dentro del panel de categorías
   listaCategoriasAdmin.innerHTML = "";
   categoriasCache.forEach((cat) => {
     const row = document.createElement("div");
@@ -290,11 +291,8 @@ function renderizarUI_Categorias() {
     };
 
     row.querySelector(".btn-del-cat").onclick = async () => {
-      if (categoriasCache.length <= 1) {
-        return alert("Debes mantener al menos una categoría activa.");
-      }
-      if (!confirm(`¿Eliminar la categoría "${cat.nombre}"? Los eventos que la tenían seguirán existiendo.`)) return;
-
+      if (categoriasCache.length <= 1) return alert("Debes mantener al menos una categoría activa.");
+      if (!confirm(`¿Eliminar la categoría "${cat.nombre}"?`)) return;
       try {
         await deleteDoc(doc(db, "agenda_categorias", cat.id));
         if (categoriaEnEdicionId === cat.id) resetearFormularioCategoria();
@@ -313,13 +311,9 @@ function obtenerCategoriaEvento(ev) {
     const encontrada = categoriasCache.find((c) => c.id === ev.categoria);
     if (encontrada) return encontrada;
   }
-  if (categoriasCache.length > 0) {
-    return categoriasCache[0];
-  }
-  return { id: "default", nombre: "General", colorId: "7", hex: "#039be5" };
+  return categoriasCache[0] || { id: "default", nombre: "General", colorId: "7", hex: "#039be5" };
 }
 
-// Suscripción en tiempo real a agenda_categorias
 const qCategorias = query(categoriasRef, orderBy("nombre", "asc"));
 
 onSnapshot(qCategorias, async (snapshot) => {
@@ -336,7 +330,6 @@ onSnapshot(qCategorias, async (snapshot) => {
       }
       return;
     } catch (e) {
-      console.warn("Usando categorías locales (actualiza tus reglas de Firestore para guardar personalizadas):", e);
       categoriasCache = [...CATEGORIAS_INICIALES];
       renderizarUI_Categorias();
       return;
@@ -344,9 +337,7 @@ onSnapshot(qCategorias, async (snapshot) => {
   }
 
   categoriasCache = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-  if (categoriasCache.length === 0) {
-    categoriasCache = [...CATEGORIAS_INICIALES];
-  }
+  if (categoriasCache.length === 0) categoriasCache = [...CATEGORIAS_INICIALES];
 
   renderizarUI_Categorias();
   if (eventosCache.length > 0) {
@@ -356,7 +347,7 @@ onSnapshot(qCategorias, async (snapshot) => {
 });
 
 // =========================================================================
-// 4. HELPERS DE FECHAS Y CUENTA REGRESIVA EN CYAN
+// 4. HELPERS DE FECHAS, RECURRENCIA (SEMANAL/MENSUAL/ANUAL) Y CHECKLIST
 // =========================================================================
 
 function actualizarTipoInputsFecha(esTodoElDia) {
@@ -369,6 +360,10 @@ checkTodoElDia.addEventListener("change", () => {
   inputInicio.value = "";
   inputFin.value = "";
   inputFin.removeAttribute("min");
+});
+
+selectRepeticion.addEventListener("change", () => {
+  contenedorDiasSemana.classList.toggle("hidden", selectRepeticion.value !== "semanal");
 });
 
 inputInicio.addEventListener("change", () => {
@@ -391,24 +386,84 @@ function sumarUnDia(fechaStr) {
   return fecha.toISOString().slice(0, 10);
 }
 
+function restarUnDia(fechaStr) {
+  const [anio, mes, dia] = fechaStr.split("-").map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia - 1));
+  return fecha.toISOString().slice(0, 10);
+}
+
 function isoALocalInput(isoStr) {
   const fecha = new Date(isoStr);
   const offset = fecha.getTimezoneOffset() * 60000;
   return new Date(fecha - offset).toISOString().slice(0, 16);
 }
 
+function obtenerTipoRepeticion(ev) {
+  if (ev.repeticion) return ev.repeticion;
+  if (ev.repetirAnual) return "anual";
+  return "ninguna";
+}
+
+function formatearEtiquetaRepeticion(ev) {
+  const tipo = obtenerTipoRepeticion(ev);
+  if (tipo === "anual") return "Anual";
+  if (tipo === "mensual") return "Mensual";
+  if (tipo === "semanal") {
+    const dias = Array.isArray(ev.diasSemana) && ev.diasSemana.length > 0
+      ? ` (${ev.diasSemana.map((d) => NOMBRES_DIAS[d] || d).join(", ")})`
+      : "";
+    return `Semanal${dias}`;
+  }
+  return "";
+}
+
+// Calcula la próxima ocurrencia según sea única, semanal, mensual o anual
 function obtenerOcurrenciaRelevante(ev) {
   const ahora = new Date();
   let inicioDate = ev.todoElDia ? new Date(`${ev.inicio.slice(0, 10)}T00:00:00`) : new Date(ev.inicio);
   let finDate = ev.todoElDia ? new Date(`${ev.fin.slice(0, 10)}T23:59:59`) : new Date(ev.fin);
+  const duracionMs = Math.max(0, finDate - inicioDate);
+  const tipo = obtenerTipoRepeticion(ev);
 
-  if (ev.repetirAnual) {
-    const duracionMs = finDate - inicioDate;
+  if (tipo === "anual") {
     inicioDate.setFullYear(ahora.getFullYear());
     finDate = new Date(inicioDate.getTime() + duracionMs);
     if (finDate < ahora) {
       inicioDate.setFullYear(ahora.getFullYear() + 1);
       finDate = new Date(inicioDate.getTime() + duracionMs);
+    }
+  } else if (tipo === "mensual") {
+    const diaOriginal = inicioDate.getDate();
+    let intentos = 0;
+    while (finDate < ahora && intentos < 36) {
+      const siguienteMes = inicioDate.getMonth() + 1;
+      inicioDate.setDate(1);
+      inicioDate.setMonth(siguienteMes);
+      const maxDiasMes = new Date(inicioDate.getFullYear(), inicioDate.getMonth() + 1, 0).getDate();
+      inicioDate.setDate(Math.min(diaOriginal, maxDiasMes));
+      finDate = new Date(inicioDate.getTime() + duracionMs);
+      intentos++;
+    }
+  } else if (tipo === "semanal") {
+    const diasObjetivo = Array.isArray(ev.diasSemana) && ev.diasSemana.length > 0
+      ? ev.diasSemana.map((d) => MAPA_DIAS_JS[d])
+      : [inicioDate.getDay()];
+
+    if (finDate < ahora) {
+      // Partir desde hoy manteniendo la hora original del evento
+      const candidato = new Date(
+        ahora.getFullYear(), ahora.getMonth(), ahora.getDate(),
+        inicioDate.getHours(), inicioDate.getMinutes(), inicioDate.getSeconds()
+      );
+      for (let i = 0; i < 14; i++) {
+        const candFin = new Date(candidato.getTime() + duracionMs);
+        if (diasObjetivo.includes(candidato.getDay()) && candFin >= ahora) {
+          inicioDate = candidato;
+          finDate = candFin;
+          break;
+        }
+        candidato.setDate(candidato.getDate() + 1);
+      }
     }
   }
 
@@ -417,9 +472,10 @@ function obtenerOcurrenciaRelevante(ev) {
 
 function calcularCuentaRegresiva(ev) {
   const ahora = new Date();
+  const tipo = obtenerTipoRepeticion(ev);
   const { inicioDate, finDate } = obtenerOcurrenciaRelevante(ev);
 
-  if (!ev.repetirAnual && finDate < ahora) {
+  if (tipo === "ninguna" && finDate < ahora) {
     const diasPasados = Math.floor((ahora - finDate) / 86400000);
     const texto = diasPasados === 0 ? "Finalizó hoy" : (diasPasados === 1 ? "Finalizó ayer" : `Finalizó hace ${diasPasados} días`);
     return { texto, esPasado: true, esInminente: false, sortTime: finDate.getTime() };
@@ -446,9 +502,54 @@ function calcularCuentaRegresiva(ev) {
   return { texto: `Faltan ${diffDias} días`, esPasado: false, esInminente: false, sortTime: inicioDate.getTime() };
 }
 
+// Helpers Checklist <-> Descripción de Google Calendar
+function construirDescripcionConChecklist(descripcionBase, subtareas) {
+  const limpia = (descripcionBase || "").split("\n--- Checklist ---")[0].trim();
+  if (!Array.isArray(subtareas) || subtareas.length === 0) return limpia;
+
+  const lineas = subtareas.map((t) => `[${t.completada ? "✓" : " "}] ${t.texto}`);
+  const bloque = `--- Checklist ---\n${lineas.join("\n")}`;
+  return limpia ? `${limpia}\n\n${bloque}` : bloque;
+}
+
+function extraerDescripcionYChecklist(descGoogle) {
+  if (!descGoogle) return { descripcion: "", subtareas: [] };
+  const partes = descGoogle.split("\n--- Checklist ---");
+  const descripcion = partes[0].trim();
+  const subtareas = [];
+
+  if (partes[1]) {
+    partes[1].trim().split("\n").forEach((linea) => {
+      const m = linea.match(/^\[(✓|x|X|\s)\]\s*(.+)$/);
+      if (m) {
+        subtareas.push({ completada: m[1].trim() !== "", texto: m[2].trim() });
+      }
+    });
+  }
+  return { descripcion, subtareas };
+}
+
 // =========================================================================
-// 5. NOTIFICACIONES MÚLTIPLES
+// 5. SUBTAREAS Y NOTIFICACIONES EN EL FORMULARIO
 // =========================================================================
+
+function crearFilaSubtarea(texto = "", completada = false) {
+  const div = document.createElement("div");
+  div.className = "fila-subtarea";
+  div.dataset.completada = completada ? "true" : "false";
+  div.innerHTML = `
+    <input type="text" class="subtarea-texto" value="${texto.replace(/"/g, "&quot;")}" placeholder="Ej. Comprar regalo / Llevar apuntes">
+    <button type="button" class="danger btn-quitar-sub" title="Quitar">✕</button>
+  `;
+  div.querySelector(".btn-quitar-sub").onclick = () => div.remove();
+  return div;
+}
+
+btnAgregarSubtarea.onclick = () => {
+  const fila = crearFilaSubtarea("", false);
+  contenedorSubtareas.appendChild(fila);
+  fila.querySelector("input").focus();
+};
 
 function crearFilaRecordatorio(cantidad = 15, unidad = "1") {
   const div = document.createElement("div");
@@ -503,7 +604,7 @@ function formatearAnticipacion(minutosTotales) {
 }
 
 // =========================================================================
-// 6. CRUD DE EVENTOS (CREAR, EDITAR, DUPLICAR, ELIMINAR)
+// 6. CRUD DE EVENTOS E IMPORTACIÓN DESDE GOOGLE CALENDAR
 // =========================================================================
 
 function cargarEventoEnFormulario(docId, ev, esEdicion = true) {
@@ -526,9 +627,19 @@ function cargarEventoEnFormulario(docId, ev, esEdicion = true) {
   const cat = obtenerCategoriaEvento(ev);
   document.getElementById("titulo").value = ev.titulo || "";
   document.getElementById("descripcion").value = ev.descripcion || "";
+  document.getElementById("ubicacion").value = ev.ubicacion || "";
+  document.getElementById("invitados").value = Array.isArray(ev.invitados) ? ev.invitados.join(", ") : "";
   selectCategoria.value = cat.id;
   checkTodoElDia.checked = Boolean(ev.todoElDia);
-  checkRepetirAnual.checked = Boolean(ev.repetirAnual);
+
+  const tipoRep = obtenerTipoRepeticion(ev);
+  selectRepeticion.value = tipoRep;
+  contenedorDiasSemana.classList.toggle("hidden", tipoRep !== "semanal");
+
+  const diasMarcados = Array.isArray(ev.diasSemana) ? ev.diasSemana : [];
+  contenedorDiasSemana.querySelectorAll("input[type='checkbox']").forEach((cb) => {
+    cb.checked = diasMarcados.includes(cb.value);
+  });
 
   actualizarTipoInputsFecha(Boolean(ev.todoElDia));
 
@@ -541,6 +652,15 @@ function cargarEventoEnFormulario(docId, ev, esEdicion = true) {
   }
   inputFin.min = inputInicio.value;
 
+  // Cargar checklist
+  contenedorSubtareas.innerHTML = "";
+  if (Array.isArray(ev.subtareas)) {
+    ev.subtareas.forEach((t) => {
+      contenedorSubtareas.appendChild(crearFilaSubtarea(t.texto, t.completada));
+    });
+  }
+
+  // Cargar recordatorios
   contenedorRec.innerHTML = "";
   const avisos = Array.isArray(ev.recordatorios)
     ? ev.recordatorios
@@ -565,6 +685,8 @@ function resetearFormulario() {
   tituloFormulario.textContent = "Nuevo Evento";
   btnGuardar.textContent = "Guardar en Web y Google Calendar";
   btnCancelarEdicion.classList.add("hidden");
+  contenedorDiasSemana.classList.add("hidden");
+  contenedorSubtareas.innerHTML = "";
   actualizarTipoInputsFecha(false);
   inputFin.removeAttribute("min");
   contenedorRec.innerHTML = "";
@@ -579,12 +701,35 @@ formEvento.onsubmit = async (e) => {
 
   const titulo = document.getElementById("titulo").value.trim();
   const descripcion = document.getElementById("descripcion").value.trim();
+  const ubicacion = document.getElementById("ubicacion").value.trim();
+  const invitadosRaw = document.getElementById("invitados").value;
+  const invitados = invitadosRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.includes("@"));
+
   const categoriaId = selectCategoria.value;
   const catInfo = categoriasCache.find((c) => c.id === categoriaId) || { colorId: "7" };
   const inicioVal = inputInicio.value;
   const finVal = inputFin.value;
   const esTodoElDia = checkTodoElDia.checked;
-  const esAnual = checkRepetirAnual.checked;
+  const repeticion = selectRepeticion.value;
+
+  const diasSemana = [];
+  if (repeticion === "semanal") {
+    contenedorDiasSemana.querySelectorAll("input[type='checkbox']:checked").forEach((cb) => {
+      diasSemana.push(cb.value);
+    });
+  }
+
+  // Recopilar subtareas
+  const subtareas = [];
+  contenedorSubtareas.querySelectorAll(".fila-subtarea").forEach((fila) => {
+    const txt = fila.querySelector(".subtarea-texto").value.trim();
+    if (txt) {
+      subtareas.push({ texto: txt, completada: fila.dataset.completada === "true" });
+    }
+  });
 
   if (!titulo) return alert("El título del evento no puede estar vacío.");
 
@@ -633,13 +778,25 @@ formEvento.onsubmit = async (e) => {
     endGoogle = { dateTime: finFirestore, timeZone: "America/Santiago", date: null };
   }
 
+  // Regla RRULE para Google Calendar
+  let recurrenceGoogle = null;
+  if (repeticion === "anual") recurrenceGoogle = ["RRULE:FREQ=YEARLY"];
+  if (repeticion === "mensual") recurrenceGoogle = ["RRULE:FREQ=MONTHLY"];
+  if (repeticion === "semanal") {
+    recurrenceGoogle = diasSemana.length > 0
+      ? [`RRULE:FREQ=WEEKLY;BYDAY=${diasSemana.join(",")}`]
+      : ["RRULE:FREQ=WEEKLY"];
+  }
+
   const eventoGoogle = {
     summary: titulo,
-    description: descripcion,
+    description: construirDescripcionConChecklist(descripcion, subtareas),
+    location: ubicacion || null,
     colorId: catInfo.colorId,
     start: startGoogle,
     end: endGoogle,
-    recurrence: esAnual ? ["RRULE:FREQ=YEARLY"] : null,
+    recurrence: recurrenceGoogle,
+    attendees: invitados.length > 0 ? invitados.map((email) => ({ email })) : [],
     reminders: {
       useDefault: overridesGoogle.length === 0,
       overrides: overridesGoogle
@@ -648,9 +805,10 @@ formEvento.onsubmit = async (e) => {
 
   try {
     const esEdicion = Boolean(eventoEnEdicion);
-    const url = esEdicion
+    const baseUrl = esEdicion
       ? `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventoEnEdicion.googleEventId}`
       : "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+    const url = invitados.length > 0 ? `${baseUrl}?sendUpdates=all` : baseUrl;
 
     const resp = await fetch(url, {
       method: esEdicion ? "PATCH" : "POST",
@@ -676,9 +834,14 @@ formEvento.onsubmit = async (e) => {
     const datosFirestore = {
       titulo,
       descripcion,
+      ubicacion,
+      invitados,
+      subtareas,
       categoria: categoriaId,
       todoElDia: esTodoElDia,
-      repetirAnual: esAnual,
+      repeticion,
+      diasSemana,
+      repetirAnual: repeticion === "anual",
       inicio: inicioFirestore,
       fin: finFirestore,
       recordatorios: listaMinutos,
@@ -703,9 +866,167 @@ formEvento.onsubmit = async (e) => {
   }
 };
 
+// Importación bidireccional desde Google Calendar hacia Firestore
+btnSyncGoogle.onclick = async () => {
+  if (!accessToken) return alert("Conecta tu cuenta de Google primero.");
+
+  btnSyncGoogle.disabled = true;
+  btnSyncGoogle.textContent = "Sincronizando...";
+
+  try {
+    const inicioHoy = new Date();
+    inicioHoy.setHours(0, 0, 0, 0);
+
+    const params = new URLSearchParams({
+      timeMin: inicioHoy.toISOString(),
+      singleEvents: "false",
+      maxResults: "100"
+    });
+
+    const resp = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`, {
+      headers: { "Authorization": `Bearer ${accessToken}` }
+    });
+
+    if (resp.status === 401) {
+      localStorage.removeItem("gcal_token");
+      throw new Error("Tu sesión expiró. Presiona 'Renovar sesión de Google' e inténtalo de nuevo.");
+    }
+    if (!resp.ok) {
+      throw new Error(`Error HTTP ${resp.status} al leer Google Calendar.`);
+    }
+
+    const data = await resp.json();
+    const items = (data.items || []).filter((it) => it.status !== "cancelled" && it.start);
+
+    let nuevos = 0;
+    let actualizados = 0;
+
+    for (const gEv of items) {
+      const esTodoElDia = Boolean(gEv.start.date);
+      let inicioFirestore, finFirestore;
+
+      if (esTodoElDia) {
+        const startStr = gEv.start.date;
+        const endExclusivo = gEv.end?.date || sumarUnDia(startStr);
+        const endInclusivo = restarUnDia(endExclusivo) < startStr ? startStr : restarUnDia(endExclusivo);
+        inicioFirestore = `${startStr}T00:00:00`;
+        finFirestore = `${endInclusivo}T23:59:59`;
+      } else {
+        inicioFirestore = new Date(gEv.start.dateTime).toISOString();
+        finFirestore = new Date(gEv.end?.dateTime || gEv.start.dateTime).toISOString();
+      }
+
+      // Detectar recurrencia
+      let repeticion = "ninguna";
+      let diasSemana = [];
+      if (Array.isArray(gEv.recurrence)) {
+        const rrule = gEv.recurrence.find((r) => r.startsWith("RRULE:"));
+        if (rrule) {
+          if (rrule.includes("FREQ=YEARLY")) repeticion = "anual";
+          else if (rrule.includes("FREQ=MONTHLY")) repeticion = "mensual";
+          else if (rrule.includes("FREQ=WEEKLY")) {
+            repeticion = "semanal";
+            const matchDias = rrule.match(/BYDAY=([A-Z,]+)/);
+            if (matchDias) diasSemana = matchDias[1].split(",");
+          }
+        }
+      }
+
+      // Mapear colorId de Google a categoría local
+      const catMatch = categoriasCache.find((c) => c.colorId === gEv.colorId) || categoriasCache[0];
+      const { descripcion, subtareas } = extraerDescripcionYChecklist(gEv.description || "");
+      const invitados = Array.isArray(gEv.attendees)
+        ? gEv.attendees.filter((a) => !a.self && a.email).map((a) => a.email)
+        : [];
+      const recordatorios = Array.isArray(gEv.reminders?.overrides)
+        ? gEv.reminders.overrides.map((r) => r.minutes)
+        : [];
+
+      const existente = eventosCache.find((e) => e.data.googleEventId === gEv.id);
+
+      const payload = {
+        titulo: gEv.summary || "(Sin título)",
+        descripcion,
+        ubicacion: gEv.location || "",
+        invitados,
+        subtareas,
+        categoria: catMatch ? catMatch.id : "personal",
+        todoElDia: esTodoElDia,
+        repeticion,
+        diasSemana,
+        repetirAnual: repeticion === "anual",
+        inicio: inicioFirestore,
+        fin: finFirestore,
+        recordatorios,
+        googleEventId: gEv.id
+      };
+
+      if (existente) {
+        payload.actualizadoEn = new Date().toISOString();
+        await updateDoc(doc(db, "agenda_eventos", existente.id), payload);
+        actualizados++;
+      } else {
+        payload.creadoEn = new Date().toISOString();
+        await addDoc(eventosRef, payload);
+        nuevos++;
+      }
+    }
+
+    alert(`Sincronización completada: ${nuevos} evento(s) nuevo(s) importado(s) y ${actualizados} actualizado(s).`);
+  } catch (err) {
+    console.error(err);
+    alert(err.message);
+  } finally {
+    btnSyncGoogle.disabled = false;
+    btnSyncGoogle.textContent = "↻ Traer eventos de Google";
+  }
+};
+
 // =========================================================================
-// 7. LISTA DE EVENTOS, FILTROS Y CONTADOR DINÁMICO EN CYAN
+// 7. LISTA DE EVENTOS, CHECKLIST INTERACTIVA, WHATSAPP Y CONTADOR CYAN
 // =========================================================================
+
+async function alternarSubtareaEnTarjeta(docId, ev, indiceSubtarea, nuevoEstado) {
+  const nuevasSubtareas = (ev.subtareas || []).map((t, i) =>
+    i === indiceSubtarea ? { ...t, completada: nuevoEstado } : t
+  );
+
+  try {
+    await updateDoc(doc(db, "agenda_eventos", docId), {
+      subtareas: nuevasSubtareas,
+      actualizadoEn: new Date().toISOString()
+    });
+
+    // Sincronizar checklist actualizado en la descripción de Google Calendar
+    if (accessToken && ev.googleEventId) {
+      const descActualizada = construirDescripcionConChecklist(ev.descripcion || "", nuevasSubtareas);
+      await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${ev.googleEventId}`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ description: descActualizada })
+      });
+    }
+  } catch (err) {
+    console.error("Error actualizando checklist:", err);
+  }
+}
+
+function compartirPorWhatsApp(ev, fechaFormateada) {
+  const lineas = [`*${ev.titulo}*`, `📅 ${fechaFormateada}`];
+  const repLabel = formatearEtiquetaRepeticion(ev);
+  if (repLabel) lineas.push(`🔁 Repetición: ${repLabel}`);
+  if (ev.ubicacion) {
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.ubicacion)}`;
+    lineas.push(`📍 ${ev.ubicacion} (${mapsUrl})`);
+  }
+  if (ev.descripcion) lineas.push(`📝 ${ev.descripcion}`);
+
+  const url = `https://wa.me/?text=${encodeURIComponent(lineas.join("\n"))}`;
+  window.open(url, "_blank", "noopener");
+}
 
 function renderizarListaEventos() {
   listaEventos.innerHTML = "";
@@ -722,8 +1043,9 @@ function renderizarListaEventos() {
   }
 
   const filtrados = procesados.filter(({ data: ev, countdown }) => {
+    const tipoRep = obtenerTipoRepeticion(ev);
     if (filtroActual === "proximos" && countdown.esPasado) return false;
-    if (filtroActual === "anuales" && !ev.repetirAnual) return false;
+    if (filtroActual === "recurrentes" && tipoRep === "ninguna") return false;
     if (filtroActual === "pasados" && !countdown.esPasado) return false;
 
     if (filtroCategoriaActual !== "todas" && ev.categoria !== filtroCategoriaActual) {
@@ -734,7 +1056,8 @@ function renderizarListaEventos() {
       const q = textoBusqueda.toLowerCase();
       const coincideTitulo = (ev.titulo || "").toLowerCase().includes(q);
       const coincideDesc = (ev.descripcion || "").toLowerCase().includes(q);
-      if (!coincideTitulo && !coincideDesc) return false;
+      const coincideLugar = (ev.ubicacion || "").toLowerCase().includes(q);
+      if (!coincideTitulo && !coincideDesc && !coincideLugar) return false;
     }
     return true;
   });
@@ -761,8 +1084,17 @@ function renderizarListaEventos() {
       ? ev.recordatorios.map(formatearAnticipacion).join(" · ")
       : (ev.minutosAlerta !== undefined ? formatearAnticipacion(ev.minutosAlerta) : "Sin aviso");
 
+    const repEtiqueta = formatearEtiquetaRepeticion(ev);
     const badgeTodoElDia = ev.todoElDia ? `<span class="badge">Todo el día</span>` : "";
-    const badgeAnual = ev.repetirAnual ? `<span class="badge anual">Anual</span>` : "";
+    const badgeRecurrente = repEtiqueta ? `<span class="badge recurrente">${repEtiqueta}</span>` : "";
+    const badgeInvitados = Array.isArray(ev.invitados) && ev.invitados.length > 0
+      ? `<span class="badge invitados" title="${ev.invitados.join(", ")}">👥 ${ev.invitados.length}</span>`
+      : "";
+
+    const linkMapsHtml = ev.ubicacion
+      ? `<br><a class="link-maps" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.ubicacion)}" target="_blank" rel="noopener">📍 ${ev.ubicacion} ↗</a>`
+      : "";
+
     const claseCountdown = countdown.esPasado ? "pasado" : (countdown.esInminente ? "inminente" : "");
 
     const div = document.createElement("div");
@@ -773,21 +1105,47 @@ function renderizarListaEventos() {
       <div class="evento-info">
         <div style="margin-bottom: 0.25rem;">
           <span class="badge-cat"><span class="punto-cat" style="background:${cat.hex};"></span>${cat.nombre}</span>
-          ${badgeTodoElDia}${badgeAnual}
+          ${badgeTodoElDia}${badgeRecurrente}${badgeInvitados}
         </div>
         <strong style="font-size:1.02rem;">${ev.titulo}</strong><br>
         ${ev.descripcion ? `<span style="font-size:0.85rem; color:#cbd5e1;">${ev.descripcion}</span><br>` : ""}
-        <small style="color:#94a3b8;">${fechaFormateada}</small><br>
-        <small style="color:#7dd3fc;">Avisos: ${listaAvisos}</small><br>
+        <small style="color:#94a3b8;">${fechaFormateada}</small>${linkMapsHtml}<br>
+        <small style="color:#7dd3fc;">Avisos: ${listaAvisos}</small>
+        <div class="slot-checklist"></div>
         <span class="countdown-pill ${claseCountdown}">${countdown.texto}</span>
       </div>
       <div class="acciones-evento">
+        <button class="whatsapp btn-whatsapp" type="button" title="Compartir por WhatsApp">WhatsApp</button>
         <button class="clone btn-duplicar" type="button" title="Clonar evento">Duplicar</button>
         <button class="edit btn-editar" type="button">Editar</button>
         <button class="danger btn-eliminar" type="button">Eliminar</button>
       </div>
     `;
 
+    // Renderizar checklist interactivo si el evento tiene subtareas
+    if (Array.isArray(ev.subtareas) && ev.subtareas.length > 0) {
+      const completadas = ev.subtareas.filter((t) => t.completada).length;
+      const box = document.createElement("div");
+      box.className = "checklist-card";
+      box.innerHTML = `<div class="checklist-titulo">Checklist (${completadas}/${ev.subtareas.length})</div>`;
+
+      ev.subtareas.forEach((sub, idx) => {
+        const label = document.createElement("label");
+        label.className = `checklist-item ${sub.completada ? "hecha" : ""}`;
+        label.innerHTML = `
+          <input type="checkbox" ${sub.completada ? "checked" : ""}>
+          <span>${sub.texto}</span>
+        `;
+        label.querySelector("input").onchange = (e) => {
+          alternarSubtareaEnTarjeta(docId, ev, idx, e.target.checked);
+        };
+        box.appendChild(label);
+      });
+
+      div.querySelector(".slot-checklist").appendChild(box);
+    }
+
+    div.querySelector(".btn-whatsapp").onclick = () => compartirPorWhatsApp(ev, fechaFormateada);
     div.querySelector(".btn-duplicar").onclick = () => cargarEventoEnFormulario(docId, ev, false);
     div.querySelector(".btn-editar").onclick = () => cargarEventoEnFormulario(docId, ev, true);
 
@@ -872,27 +1230,20 @@ setInterval(() => {
 
 function construirEventosFullCalendar() {
   const eventosFC = [];
-  const anioActual = new Date().getFullYear();
+  const ahora = new Date();
+  const anioActual = ahora.getFullYear();
 
   eventosCache.forEach(({ id: docId, data: ev }) => {
     const cat = obtenerCategoriaEvento(ev);
-    const anios = ev.repetirAnual ? [anioActual - 1, anioActual, anioActual + 1] : [null];
+    const tipoRep = obtenerTipoRepeticion(ev);
 
-    anios.forEach((anioProyectado) => {
-      let startStr = ev.inicio;
-      let endStr = ev.fin;
-
-      if (anioProyectado !== null) {
-        startStr = `${anioProyectado}${ev.inicio.slice(4)}`;
-        endStr = `${anioProyectado}${ev.fin.slice(4)}`;
-      }
-
+    const agregarOcurrenciaFC = (sufijo, startISO, endISO) => {
       if (ev.todoElDia) {
         eventosFC.push({
-          id: `${docId}_${anioProyectado || "unico"}`,
+          id: `${docId}_${sufijo}`,
           title: ev.titulo,
-          start: startStr.slice(0, 10),
-          end: sumarUnDia(endStr.slice(0, 10)),
+          start: startISO.slice(0, 10),
+          end: sumarUnDia(endISO.slice(0, 10)),
           allDay: true,
           backgroundColor: cat.hex,
           borderColor: cat.hex,
@@ -900,17 +1251,65 @@ function construirEventosFullCalendar() {
         });
       } else {
         eventosFC.push({
-          id: `${docId}_${anioProyectado || "unico"}`,
+          id: `${docId}_${sufijo}`,
           title: ev.titulo,
-          start: startStr,
-          end: endStr,
+          start: startISO,
+          end: endISO,
           allDay: false,
           backgroundColor: cat.hex,
           borderColor: cat.hex,
           extendedProps: { docId, ev }
         });
       }
-    });
+    };
+
+    if (tipoRep === "ninguna") {
+      agregarOcurrenciaFC("unico", ev.inicio, ev.fin);
+    } else if (tipoRep === "anual") {
+      [anioActual - 1, anioActual, anioActual + 1].forEach((anio) => {
+        agregarOcurrenciaFC(`y_${anio}`, `${anio}${ev.inicio.slice(4)}`, `${anio}${ev.fin.slice(4)}`);
+      });
+    } else if (tipoRep === "mensual") {
+      const baseStart = new Date(ev.inicio);
+      const baseEnd = new Date(ev.fin);
+      const duracionMs = baseEnd - baseStart;
+      const diaOriginal = baseStart.getDate();
+
+      for (let offsetMes = -2; offsetMes <= 10; offsetMes++) {
+        const dStart = new Date(anioActual, ahora.getMonth() + offsetMes, 1, baseStart.getHours(), baseStart.getMinutes());
+        const maxDias = new Date(dStart.getFullYear(), dStart.getMonth() + 1, 0).getDate();
+        dStart.setDate(Math.min(diaOriginal, maxDias));
+        const dEnd = new Date(dStart.getTime() + duracionMs);
+
+        if (ev.todoElDia) {
+          const ymd = `${dStart.getFullYear()}-${String(dStart.getMonth() + 1).padStart(2, "0")}-${String(dStart.getDate()).padStart(2, "0")}`;
+          agregarOcurrenciaFC(`m_${offsetMes}`, `${ymd}T00:00:00`, `${ymd}T23:59:59`);
+        } else {
+          agregarOcurrenciaFC(`m_${offsetMes}`, dStart.toISOString(), dEnd.toISOString());
+        }
+      }
+    } else if (tipoRep === "semanal") {
+      const baseStart = new Date(ev.inicio);
+      const baseEnd = new Date(ev.fin);
+      const duracionMs = baseEnd - baseStart;
+      const diasObjetivo = Array.isArray(ev.diasSemana) && ev.diasSemana.length > 0
+        ? ev.diasSemana.map((d) => MAPA_DIAS_JS[d])
+        : [baseStart.getDay()];
+
+      const cursor = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - 28, baseStart.getHours(), baseStart.getMinutes());
+      for (let d = 0; d < 140; d++) {
+        if (diasObjetivo.includes(cursor.getDay())) {
+          const dEnd = new Date(cursor.getTime() + duracionMs);
+          if (ev.todoElDia) {
+            const ymd = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+            agregarOcurrenciaFC(`w_${d}`, `${ymd}T00:00:00`, `${ymd}T23:59:59`);
+          } else {
+            agregarOcurrenciaFC(`w_${d}`, cursor.toISOString(), dEnd.toISOString());
+          }
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
   });
 
   return eventosFC;

@@ -22,7 +22,7 @@
       --cyan: #06b6d4;
       --cyan-bright: #22d3ee;
     }
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 720px; margin: 1.5rem auto; padding: 0 1rem; background: var(--bg); color: var(--text); }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 740px; margin: 1.5rem auto; padding: 0 1rem; background: var(--bg); color: var(--text); }
     .header-app { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
     .header-app img { width: 38px; height: 38px; border-radius: 10px; }
     .header-app h1 { margin: 0; font-size: 1.5rem; }
@@ -33,15 +33,27 @@
     button:hover { opacity: 0.92; }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     button.secondary { background: var(--border); color: var(--text); font-weight: 500; }
+    button.sync-btn { background: rgba(6, 182, 212, 0.16); color: var(--cyan-bright); border: 1px solid var(--cyan); font-weight: 600; }
+    button.whatsapp { background: #22c55e; color: #052e16; width: auto; padding: 0.35rem 0.65rem; margin-top: 0; font-size: 0.82rem; }
     button.edit { background: #f59e0b; color: var(--bg); width: auto; padding: 0.35rem 0.65rem; margin-top: 0; font-size: 0.82rem; }
     button.clone { background: #38bdf8; color: var(--bg); width: auto; padding: 0.35rem 0.65rem; margin-top: 0; font-size: 0.82rem; }
     button.danger { background: #ef4444; color: white; width: auto; padding: 0.35rem 0.65rem; margin-top: 0; font-size: 0.82rem; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    @media (max-width: 520px) { .grid-2 { grid-template-columns: 1fr; } }
+    @media (max-width: 540px) { .grid-2 { grid-template-columns: 1fr; } }
+    .auth-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+    @media (max-width: 540px) { .auth-actions { grid-template-columns: 1fr; } }
+    .auth-actions button { margin-top: 0; }
     .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; cursor: pointer; font-size: 0.9rem; color: #cbd5e1; user-select: none; }
     .checkbox-row input { width: auto; margin: 0; accent-color: var(--cyan); }
     .fila-recordatorio { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
     .fila-recordatorio input, .fila-recordatorio select { margin-top: 0; }
+    .fila-subtarea { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; margin-top: 0.45rem; }
+    .fila-subtarea input { margin-top: 0; }
+
+    /* Selector de días de semana para repetición semanal */
+    .dias-semana-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+    .dia-chip { display: inline-flex; align-items: center; gap: 0.3rem; background: var(--bg); border: 1px solid var(--border); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.82rem; cursor: pointer; user-select: none; }
+    .dia-chip input { width: auto; margin: 0; accent-color: var(--cyan); }
 
     /* Selector de categoría + botón gestionar */
     .categoria-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
@@ -67,7 +79,7 @@
 
     /* Filtros y búsqueda */
     .busqueda-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 0.5rem; }
-    @media (max-width: 520px) { .busqueda-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 540px) { .busqueda-grid { grid-template-columns: 1fr; } }
     .busqueda-grid input, .busqueda-grid select { margin-top: 0; }
     .filtros-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0.8rem; align-items: center; }
     .filtro-pill { width: auto; margin: 0; padding: 0.32rem 0.75rem; font-size: 0.8rem; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
@@ -76,16 +88,29 @@
 
     /* Tarjetas de eventos */
     .evento { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.8rem; background: rgba(15, 23, 42, 0.55); border: 1px solid var(--border); border-left: 4px solid var(--cyan); border-radius: 8px; padding: 0.85rem; margin-bottom: 0.65rem; transition: opacity 0.2s; }
+    @media (max-width: 600px) { .evento { flex-direction: column; } }
     .evento.pasado { opacity: 0.58; }
-    .evento-info { flex: 1; min-width: 0; }
+    .evento-info { flex: 1; min-width: 0; width: 100%; }
     .acciones-evento { display: flex; flex-wrap: wrap; gap: 0.35rem; flex-shrink: 0; }
-    .badge { display: inline-block; background: var(--bg); color: #cbd5e1; font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid var(--border); margin-left: 0.35rem; vertical-align: middle; }
-    .badge.anual { color: #c4b5fd; border-color: #5b21b6; }
-    .badge-cat { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.73rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--border); margin-right: 0.4rem; }
+    .badge { display: inline-block; background: var(--bg); color: #cbd5e1; font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid var(--border); margin-left: 0.3rem; vertical-align: middle; }
+    .badge.recurrente { color: #c4b5fd; border-color: #5b21b6; }
+    .badge.invitados { color: #86efac; border-color: #166534; }
+    .badge-cat { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.73rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--border); margin-right: 0.2rem; }
     .punto-cat { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
+    /* Ubicación y Maps */
+    .link-maps { display: inline-flex; align-items: center; gap: 0.3rem; color: #38bdf8; text-decoration: none; font-size: 0.83rem; margin-top: 0.25rem; }
+    .link-maps:hover { text-decoration: underline; }
+
+    /* Checklist interactiva en tarjeta */
+    .checklist-card { margin-top: 0.5rem; padding: 0.5rem 0.65rem; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); border-radius: 6px; }
+    .checklist-titulo { font-size: 0.76rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 600; }
+    .checklist-item { display: flex; align-items: center; gap: 0.45rem; font-size: 0.84rem; color: #e2e8f0; margin-top: 0.25rem; cursor: pointer; }
+    .checklist-item input { width: auto; margin: 0; accent-color: var(--cyan); cursor: pointer; }
+    .checklist-item.hecha span { text-decoration: line-through; color: var(--muted); }
+
     /* Contador dinámico resaltado en cyan */
-    .countdown-pill { display: inline-block; margin-top: 0.35rem; padding: 0.18rem 0.55rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; color: var(--cyan-bright); background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.45); letter-spacing: 0.01em; }
+    .countdown-pill { display: inline-block; margin-top: 0.45rem; padding: 0.18rem 0.55rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; color: var(--cyan-bright); background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.45); letter-spacing: 0.01em; }
     .countdown-pill.inminente { background: rgba(6, 182, 212, 0.26); border-color: var(--cyan-bright); box-shadow: 0 0 10px rgba(6, 182, 212, 0.22); }
     .countdown-pill.pasado { color: var(--muted); background: rgba(51, 65, 85, 0.35); border-color: var(--border); font-weight: 500; box-shadow: none; }
 
@@ -109,14 +134,28 @@
   </div>
 
   <div class="card">
-    <button id="btn-auth">Conectar con Google Calendar</button>
-    <p id="estado-auth" style="margin: 0.5rem 0 0; font-size: 0.9rem; color: #94a3b8;">Desconectado</p>
+    <div class="auth-actions">
+      <button id="btn-auth">Conectar con Google Calendar</button>
+      <button id="btn-sync-google" class="sync-btn hidden" type="button">↻ Traer eventos de Google</button>
+    </div>
+    <p id="estado-auth" style="margin: 0.55rem 0 0; font-size: 0.9rem; color: #94a3b8;">Desconectado</p>
   </div>
 
   <form id="form-evento" class="card hidden">
     <h3 id="titulo-formulario" style="margin-top:0;">Nuevo Evento</h3>
     <input type="text" id="titulo" placeholder="Título del evento" required>
-    <textarea id="descripcion" placeholder="Descripción (opcional)" rows="2"></textarea>
+    <textarea id="descripcion" placeholder="Descripción o notas (opcional)" rows="2"></textarea>
+
+    <div class="grid-2" style="margin-top: 0.25rem;">
+      <div>
+        <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.5rem;">Ubicación (abre en Google Maps):</label>
+        <input type="text" id="ubicacion" placeholder="Ej. INACAP Valdivia, Av. Pedro Aguirre Cerda">
+      </div>
+      <div>
+        <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.5rem;">Invitados por correo (separados por coma):</label>
+        <input type="text" id="invitados" placeholder="ej. manuela@gmail.com, amigo@gmail.com">
+      </div>
+    </div>
 
     <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.7rem;">Categoría (sincroniza color en Google Calendar):</label>
     <div class="categoria-row">
@@ -124,22 +163,19 @@
       <button type="button" id="btn-toggle-categorias" class="secondary">⚙ Gestionar</button>
     </div>
 
-    <!-- Gestor de Categorías (Crear / Editar / Eliminar) -->
+    <!-- Gestor de Categorías -->
     <div id="panel-categorias" class="panel-categorias hidden">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <h4 id="titulo-form-cat">Administrar Categorías</h4>
         <button type="button" id="btn-cerrar-categorias" class="secondary" style="width:auto; margin:0; padding:0.2rem 0.55rem; font-size:0.8rem;">Cerrar</button>
       </div>
-      
       <input type="text" id="cat-nombre" placeholder="Nombre de la categoría (ej. Gimnasio, Proyecto, Citas)">
       <label style="font-size: 0.8rem; color: #94a3b8; display:block; margin-top:0.5rem;">Color compatible con Google Calendar: <strong id="cat-color-label" style="color:#f8fafc;">Pavo real (Cyan)</strong></label>
       <div id="paleta-colores" class="paleta-colores"></div>
-
       <div style="display:flex; gap:0.5rem; margin-top:0.4rem;">
         <button type="button" id="btn-guardar-categoria" style="margin-top:0;">+ Crear Categoría</button>
         <button type="button" id="btn-cancelar-cat" class="secondary hidden" style="margin-top:0; width:auto;">Cancelar</button>
       </div>
-
       <div id="lista-categorias-admin" style="margin-top:0.8rem;"></div>
     </div>
 
@@ -148,10 +184,26 @@
       Evento de todo el día (sin hora específica)
     </label>
 
-    <label class="checkbox-row">
-      <input type="checkbox" id="repetir-anual">
-      Repetir todos los años (ej. cumpleaños o aniversarios)
-    </label>
+    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.75rem;">Repetición automática:</label>
+    <select id="repeticion">
+      <option value="ninguna" selected>No se repite (solo esa fecha)</option>
+      <option value="semanal">Cada semana (horarios / clases / rutinas)</option>
+      <option value="mensual">Cada mes (pagos / fechas fijas)</option>
+      <option value="anual">Todos los años (cumpleaños / aniversarios)</option>
+    </select>
+
+    <div id="contenedor-dias-semana" class="hidden">
+      <label style="font-size: 0.8rem; color: #94a3b8; display:block; margin-top:0.5rem;">Días de la semana (si no marcas ninguno, usa el día de Inicio):</label>
+      <div class="dias-semana-grid">
+        <label class="dia-chip"><input type="checkbox" value="MO"> Lun</label>
+        <label class="dia-chip"><input type="checkbox" value="TU"> Mar</label>
+        <label class="dia-chip"><input type="checkbox" value="WE"> Mié</label>
+        <label class="dia-chip"><input type="checkbox" value="TH"> Jue</label>
+        <label class="dia-chip"><input type="checkbox" value="FR"> Vie</label>
+        <label class="dia-chip"><input type="checkbox" value="SA"> Sáb</label>
+        <label class="dia-chip"><input type="checkbox" value="SU"> Dom</label>
+      </div>
+    </div>
     
     <div class="grid-2" style="margin-top: 0.3rem;">
       <div>
@@ -163,6 +215,11 @@
         <input type="datetime-local" id="fin" required>
       </div>
     </div>
+
+    <!-- Checklist de subtareas -->
+    <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.8rem;">Checklist / Subtareas del evento (opcional):</label>
+    <div id="contenedor-subtareas"></div>
+    <button type="button" id="btn-agregar-subtarea" class="secondary" style="margin-top: 0.45rem;">+ Agregar tarea al checklist</button>
 
     <label style="font-size: 0.85rem; color: #94a3b8; display:block; margin-top:0.8rem;">Notificaciones (máx. 5 por evento):</label>
     <div id="contenedor-recordatorios">
@@ -195,7 +252,7 @@
     <!-- Vista Lista -->
     <div id="panel-lista">
       <div class="busqueda-grid">
-        <input type="search" id="buscador-eventos" placeholder="Buscar por título o descripción...">
+        <input type="search" id="buscador-eventos" placeholder="Buscar por título, lugar o nota...">
         <select id="filtro-categoria">
           <option value="todas">Todas las categorías</option>
         </select>
@@ -203,7 +260,7 @@
       <div class="filtros-bar" id="filtros-tiempo">
         <button type="button" class="filtro-pill active" data-filtro="todos">Todos</button>
         <button type="button" class="filtro-pill" data-filtro="proximos">Próximos</button>
-        <button type="button" class="filtro-pill" data-filtro="anuales">Anuales</button>
+        <button type="button" class="filtro-pill" data-filtro="recurrentes">Recurrentes</button>
         <button type="button" class="filtro-pill" data-filtro="pasados">Pasados</button>
         <button type="button" id="btn-limpiar-pasados" class="hidden">Limpiar pasados</button>
       </div>
@@ -217,6 +274,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=4"></script>
+  <script type="module" src="app.js?v=5"></script>
 </body>
 </html>
